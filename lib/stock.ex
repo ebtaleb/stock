@@ -46,7 +46,7 @@ defmodule Stock do
     headers = [{"Cookie", "api_key=#{api_token}"}]
 
     case Stockastic.post(url, "", headers, []) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+      {:ok, %HTTPoison.Response{status_code: 200, body: _}} ->
         IO.puts "Instance #{instance_id} restarted"
       {:error, %HTTPoison.Error{reason: reason}} ->
         IO.inspect reason
@@ -58,7 +58,7 @@ defmodule Stock do
     headers = [{"Cookie", "api_key=#{api_token}"}]
 
     case Stockastic.post(url, "", headers, []) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+      {:ok, %HTTPoison.Response{status_code: 200, body: _}} ->
         IO.puts "Instance #{instance_id} stopped"
       {:error, %HTTPoison.Error{reason: reason}} ->
         IO.inspect reason
@@ -70,7 +70,7 @@ defmodule Stock do
     headers = [{"Cookie", "api_key=#{api_token}"}]
 
     case Stockastic.post(url, "", headers, []) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+      {:ok, %HTTPoison.Response{status_code: 200, body: _}} ->
         IO.puts "Instance #{instance_id} resumed"
       {:error, %HTTPoison.Error{reason: reason}} ->
         IO.inspect reason
@@ -89,51 +89,126 @@ defmodule Stock do
     end
   end
 
-  #def place_order(price, amount, dir, order_type) do
-
-    #order = %{
-      #account:   account,
-      #venue:     venue,
-      #stock:     ticker,
-      #price:     price,
-      #qty:       amount,
-      #direction: dir,
-      #orderType: order_type
-    #}
-
-    #Stockastic.Orders.place_order(venue, stock, order, client)
-  #end
-
-  def main do
-
-    client = get_client
+  def init_state do
     instance_data = new_instance("chock_a_block")
+    {:ok, state} = KV.start_link(instance_data)
+    KV.put(state, "client", get_client)
+    state
+  end
 
-    account = instance_data["account"] 
-    instance_id = instance_data["instanceId"] 
-    secondsPerTradingDay = instance_data["secondsPerTradingDay"] 
-    ticker = hd(instance_data["tickers"])
-    venue = hd(instance_data["venues"])
+  def get_account(s) do
+    KV.get(s, "account")
+  end
 
-    #lvl_stats(instance_id)
+  def get_instanceId(s) do
+    KV.get(s, "instanceId")
+  end
 
-    #IO.puts "listing stocks for venue #{venue}"
-    #Stockastic.Stocks.list(venue, client)
+  def get_1st_ticker(s) do
+    hd(KV.get(s, "tickers"))
+  end
 
-    #IO.puts "listing orders for stock #{ticker} on venue #{venue}"
-    #Stockastic.Orders.list_for_stock(venue, account, ticker, client)
+  def list_tickers(s) do
+    KV.get(s, "tickers")
+  end
+
+  def get_1st_venue(s) do
+    hd(KV.get(s, "venues"))
+  end
+
+  def list_venues(s) do
+    KV.get(s, "venues")
+  end
+
+  def get_client(s) do
+    KV.get(s, "client")
+  end
+
+  def get_orderbook(s) do
+    ticker = get_1st_ticker(s)
+    venue = get_1st_venue(s)
+    client = get_client(s)
 
     IO.puts "fetching orderbook for stock #{ticker} on venue #{venue}"
     Stockastic.Stocks.orderbook(venue, ticker, client)
+  end
 
-    #IO.puts "cancelling order 1 for stock #{ticker} on venue #{venue}"
-    #Stockastic.Orders.cancel(venue, ticker, 1, client)
-    #Stockastic.Orders.cancel(venue, ticker, id, client)
-    #cancel(id)
+  def get_orderbook(s, t, v) do
+    ticker = t
+    venue = v
+    client = get_client(s)
 
-    #place_order(price, amount, dir, order_type)
+    IO.puts "fetching orderbook for stock #{ticker} on venue #{venue}"
+    Stockastic.Stocks.orderbook(venue, ticker, client)
+  end
 
-    #stop_instance(instance_id)
+  def list_stocks(s) do
+    venue = get_1st_venue(s)
+    IO.puts "listing stocks for venue #{venue}"
+    Stockastic.Stocks.list(venue, get_client(s))
+  end
+
+  def list_stocks(s, venue) do
+    IO.puts "listing stocks for venue #{venue}"
+    Stockastic.Stocks.list(venue, get_client(s))
+  end
+
+  def list_orders(s, t, v) do
+    IO.puts "listing orders for stock #{t} on venue #{v}"
+    Stockastic.Orders.list_for_stock(v, get_account(s), t, get_client(s))
+  end
+
+  def list_orders(s) do
+    t = get_1st_ticker(s)
+    v = get_1st_venue(s)
+    IO.puts "listing orders for stock #{t} on venue #{v}"
+    Stockastic.Orders.list_for_stock(v, get_account(s), t, get_client(s))
+  end
+
+  def place_order(s, price, amount, dir) do
+    stock = get_1st_ticker(s)
+    venue = get_1st_venue(s)
+
+    order = %{
+      account:   get_account(s),
+      venue:     venue,
+      stock:     stock,
+      price:     price,
+      qty:       amount,
+      direction: dir,
+      orderType: "limit"
+    }
+
+    IO.puts "#{dir}ing #{amount} stocks of #{stock} on venue #{venue}"
+    Stockastic.Orders.place_order(venue, stock, order, get_client(s))
+  end
+
+  def place_order(s, price, amount, dir, stock, venue) do
+
+    order = %{
+      account:   get_account(s),
+      venue:     venue,
+      stock:     stock,
+      price:     price,
+      qty:       amount,
+      direction: dir,
+      orderType: "limit"
+    }
+
+    IO.puts "#{dir}ing #{amount} stocks of #{stock} on venue #{venue}"
+    Stockastic.Orders.place_order(venue, stock, order, get_client(s))
+  end
+
+  def cancel(s, id) do
+    ticker = get_1st_ticker(s)
+    venue = get_1st_venue(s)
+    IO.puts "cancelling order #{id} for stock #{ticker} on venue #{venue}"
+    Stockastic.Orders.cancel(venue, ticker, id, get_client(s))
+  end
+
+  def cancel(s, id, t, v) do
+    IO.puts "cancelling order #{id} for stock #{t} on venue #{v}"
+    Stockastic.Orders.cancel(v, t, id, get_client(s))
   end
 
 end
