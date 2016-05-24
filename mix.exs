@@ -27,6 +27,7 @@ defmodule Stock.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   def deps do
-      [{:stockastic, "~> 0.0.2"}]
+      [{:stockastic, "~> 0.0.2"},
+       {:encurses, github: "jzellner/encurses" }]
   end
 end
