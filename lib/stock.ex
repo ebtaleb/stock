@@ -211,4 +211,26 @@ defmodule Stock do
     Stockastic.Orders.cancel(v, t, id, get_client(s))
   end
 
+  def ticker_tape(s) do
+    url = "api.stockfighter.io"
+    url_path = "/ob/api/ws/#{get_account(s)}/venues/#{get_1st_venue(s)}/tickertape/stocks/#{get_1st_ticker(s)}"
+    socket = Socket.Web.connect! url, path: url_path, secure: true
+    case socket |> Socket.Web.recv! do
+      {:text, data} -> parse(data)
+      {:ping, _ } ->
+        socket |> Socket.Web.send!({:pong, ""})
+    end
+  end
+
+  def fills(s) do
+    url = "api.stockfighter.io"
+    url_path = "/ob/api/ws/#{get_account(s)}/venues/#{get_1st_venue(s)}/executions/stocks/#{get_1st_ticker(s)}"
+    socket = Socket.Web.connect! url, path: url_path, secure: true
+    case socket |> Socket.Web.recv! do
+      {:text, data} -> parse(data)
+      {:ping, _ } ->
+        socket |> Socket.Web.send!({:pong, ""}); socket |> Socket.Web.recv!
+    end
+  end
+
 end
